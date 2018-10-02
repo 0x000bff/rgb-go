@@ -23,7 +23,9 @@ func (c *Color) Pwm(freq int, duty int) {
     t := 1
     cycles := t * freq
     samples := freq * 100
-    for i := 0; i < cycles; i++ {
+    for {
+        select {
+            quit <- 
         c.pin.High()
         time.Sleep((time.Second * time.Duration(duty)) / time.Duration(samples))
         c.pin.Low()
