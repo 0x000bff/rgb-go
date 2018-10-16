@@ -9,26 +9,37 @@ import (
 )
 
 
-type Color struct {
+var (
+    redPin = rpio.Pin(22)
+    greenPin = rpio.Pin(17)
+    bluePin = rpio.Pin(24)
+    whitePin = rpio.Pin(27)
+)
+
+
+type ColorComponent struct {
     pin rpio.Pin
     intensity chan int
     quit chan int
 }
 
-func NewColor(pin rpio.Pin) *Color {
-    c := new(Color)
+
+func NewColorComponent(pin rpio.Pin) *ColorComponent {
+    c := new(ColorComponent)
     c.pin = pin
     c.pin.Output()
-    //go c.Pwm(c.intensity, c.quit, 1000, 0)
+    c.intensity = make(chan int)
+    c.quit = make(chan int)
+    go c.Pwm(c.intensity, c.quit, 1000, 0)
     return c
 }
 
-func (c *Color) Pwm(intensity, quit chan int, freq int, duty float64) {
+
+func (c *ColorComponent) Pwm(intensity, quit chan int, freq int, duty float64) {
     samples := freq * 100
     for {
         select {
             case val := <-intensity:
-                fmt.Println("received", val)
                 duty = intensityToDutyCycle(val)
                 continue
             case <-quit:
@@ -44,6 +55,32 @@ func (c *Color) Pwm(intensity, quit chan int, freq int, duty float64) {
 }
 
 
+type Color struct {
+    red *ColorComponent
+    green *ColorComponent
+    blue *ColorComponent
+    white *ColorComponent
+}
+
+
+func NewColor() *Color {
+    c := new(Color)
+    c.red = NewColorComponent(redPin)
+    c.green = NewColorComponent(greenPin)
+    c.blue = NewColorComponent(bluePin)
+    c.white = NewColorComponent(whitePin)
+    return c
+}
+
+
+func (c *Color) quit() {
+    c.red.quit <- 0
+    c.blue.quit <- 0
+    c.green.quit <- 0
+    c.white.quit <- 0
+}
+
+
 func intensityToDutyCycle(intensity int)  float64 {
     if intensity < 0 {
         intensity = 0
@@ -55,6 +92,7 @@ func intensityToDutyCycle(intensity int)  float64 {
     return duty
 }
 
+
 func main() {
 	if err := rpio.Open(); err != nil {
 		fmt.Println(err)
@@ -62,14 +100,11 @@ func main() {
 	}
 	defer rpio.Close()
 
-    red := NewColor(22)
+    color := NewColor()
 
-    for x := 0; x < 4; x++ {
-        red.pin.Toggle()
-        time.Sleep(time.Second / 10)
+    for x := 1; x < 256; x++ {
+        color.red.intensity <- x
+        time.Sleep(time.Second / 200)
     }
-    //for x := 0; x < 255; x++ {
-        //red.intensity <- x
-        //time.Sleep(time.Second * 5 / 255)
-    //}
+    color.quit()
 }
